@@ -1,0 +1,9 @@
+{
+  "name": "Nanba AI - Tamil Voice Friend",
+  "short_name": "Nanba AI",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#101827",
+  "theme_color": "#101827",
+  "description": "A phone-friendly Tamil and Tanglish voice companion starter."
+}

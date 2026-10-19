@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<title>Nanba AI — Your Voice Friend</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{color-scheme:dark;--bg:#101827;--panel:#1b2940;--accent:#7dd3fc;--muted:#b8c7da}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:radial-gradient(circle at top,#213b5a,var(--bg) 58%);color:#f3f6fb;min-height:100vh}
+main{max-width:620px;margin:auto;padding:24px 18px calc(28px + env(safe-area-inset-bottom))}
+header{text-align:center;padding:22px 0 18px}.orb{width:88px;height:88px;border-radius:50%;margin:auto;display:grid;place-items:center;font-size:42px;background:linear-gradient(145deg,#244c72,#15253c);border:1px solid #4c7595;box-shadow:0 0 40px #38bdf833}
+h1{font-size:28px;margin:14px 0 4px}.sub{color:var(--muted);font-size:14px}
+.card{background:#1b2940e8;border:1px solid #31445e;border-radius:20px;padding:16px;margin:14px 0}
+.status{font-size:14px;color:var(--accent);text-align:center;min-height:22px}
+.chat{min-height:180px;max-height:38vh;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.msg{padding:12px 14px;border-radius:16px;white-space:pre-wrap;line-height:1.45;max-width:95%}.bot{background:#263953;align-self:flex-start}.you{background:#164e63;align-self:flex-end}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+button,select{font:inherit;border-radius:14px;border:1px solid #46627f;padding:13px;background:#243852;color:white}
+button.primary{background:#0284c7;border-color:#38bdf8;font-weight:700;grid-column:1/-1;padding:17px;font-size:18px}
+button:disabled{opacity:.55}label{display:block;color:var(--muted);font-size:13px;margin:12px 0 6px}
+input{width:100%;padding:12px;border-radius:12px;border:1px solid #46627f;background:#101827;color:white;font:inherit}
+.note{font-size:12px;color:#9fb1c7;line-height:1.5}.footer{text-align:center;color:#9fb1c7;font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+<header><div class="orb">💙</div><h1>Nanba AI</h1><div class="sub">Un voice friend · Tamil + Tanglish</div></header>
+<div class="card"><div id="status" class="status">Vanakkam bro! Start listening tap pannina Nanbi kekka ready 😊</div>
+<div id="chat" class="chat" aria-live="polite"><div class="msg bot">Nanbi: Hi bro! Naan un voice friend. Tamil-la pesalaam. 🎙️</div></div></div>
+<div class="card">
+<button id="speak" class="primary">🎙️ Start listening</button>
+<button id="stopListen" style="width:100%;margin-top:8px">⏹ Stop listening</button>
+<div class="controls" style="margin-top:10px">
+<button id="repeat">🔊 Repeat reply</button><button id="clear">🧹 Clear chat</button>
+</div>
+<label for="voice">Voice (Tamil voice irundha select pannunga)</label><select id="voice"><option value="">Best available Tamil voice</option></select>
+<p class="note">Continuous mode: start listening once. Nanbi reply sonna piragu, listening thirumba start aagum. Stop button use pannina niruthalaam.</p>
+<label for="name">Friend name</label><input id="name" value="Nanbi" maxlength="24">
+<p class="note">Privacy: voice recognition may be processed by your browser speech service. Your text is sent to this site's secure Netlify function and then to the AI provider. Do not share passwords or highly sensitive information.</p>
+</div>
+<div class="footer">Phone-friendly AI starter · Internet required · API key stays on server</div>
+</main>
+<script>
+const statusEl=document.querySelector('#status'), chat=document.querySelector('#chat'), speakBtn=document.querySelector('#speak');
+const voiceSelect=document.querySelector('#voice'), nameInput=document.querySelector('#name');
+let lastReply="Hi bro! Naan un voice friend. Tamil-la pesalaam.";
+function addMessage(text,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=text;chat.appendChild(d);chat.scrollTop=chat.scrollHeight;}
+function voices(){
+ const vs=window.speechSynthesis?.getVoices?.()||[];
+ voiceSelect.innerHTML='<option value="">Best available Tamil voice</option>';
+ // Prefer Tamil voices, but show other installed voices too.
+ const ordered=[...vs.filter(v=>/^ta(-|_)/i.test(v.lang)),...vs.filter(v=>!/^ta(-|_)/i.test(v.lang))];
+ ordered.forEach(v=>{const i=vs.indexOf(v);const o=document.createElement('option');o.value=String(i);o.textContent=v.name+' ('+v.lang+')';voiceSelect.appendChild(o);});
+}
+if(window.speechSynthesis){voices();speechSynthesis.onvoiceschanged=voices;}
+let continuousMode=false, listening=false, recognition=null, restartAfterSpeech=false;
+function say(text){
+ if(!window.speechSynthesis){statusEl.textContent='Indha browser voice output support pannala.';return;}
+ speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(text);
+ const vs=speechSynthesis.getVoices();
+ let v=voiceSelect.value!==''?vs[Number(voiceSelect.value)]:vs.find(x=>/^ta(-|_)/i.test(x.lang));
+ if(v)u.voice=v;
+ u.lang=v?.lang||'ta-IN';
+ // Slightly slower, softer delivery; actual naturalness depends on installed Android TTS voice.
+ u.rate=.88;u.pitch=1.13;u.volume=1;
+ u.onstart=()=>{statusEl.textContent='Nanbi pesura... 💙';};
+ u.onend=()=>{if(continuousMode && restartAfterSpeech){restartAfterSpeech=false;setTimeoutSafeStart();}else if(!continuousMode){statusEl.textContent='Reply mudinjiduchu 😊';}};
+ speechSynthesis.speak(u);
+}
+function setTimeoutSafeStart(){setTimeout(()=>{if(continuousMode)startRecognition();},450);}
+async function reply(raw){
+ addMessage('Nee: '+raw,'you');
+ statusEl.textContent='Nanbi yosikkura... 💭';
+ try {
+   const response = await fetch('/.netlify/functions/chat', {
+     method:'POST',
+     headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({
+       message:raw,
+       history:Array.from(chat.querySelectorAll('.msg')).slice(-12).map(el=>({
+         role:el.classList.contains('you')?'user':'assistant',
+         content:el.textContent.replace(/^[^:]+:\\s*/, '')
+       }))
+     })
+   });
+   const data = await response.json().catch(()=>({}));
+   if(!response.ok) throw new Error(data.error || 'Server error ('+response.status+')');
+   lastReply = data.reply || 'Sorry bro, ippo reply varala. Marubadi try pannalama?';
+   addMessage((nameInput.value.trim()||'Nanbi')+': '+lastReply,'bot');
+   statusEl.textContent='Reply ready 😊';
+   restartAfterSpeech=continuousMode;
+   say(lastReply);
+ } catch(err) {
+   lastReply = 'Bro, AI server connect aagala. Netlify function deploy aayirukka, OPENAI_API_KEY set pannirukkiya nu check pannalaam.';
+   addMessage((nameInput.value.trim()||'Nanbi')+': '+lastReply,'bot');
+   statusEl.textContent='AI connection error: '+(err.message||'Please try again');
+   restartAfterSpeech=continuousMode;
+   say(lastReply);
+ }
+}
+function startRecognition(){
+ const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+ if(!SR){statusEl.textContent='Indha browser-la voice recognition support illa. Chrome-la try pannu.';continuousMode=false;return;}
+ if(listening)return;
+ try{
+   recognition=new SR(); recognition.lang='ta-IN'; recognition.interimResults=false; recognition.maxAlternatives=1;
+   recognition.onstart=()=>{listening=true;speakBtn.textContent='🎧 Listening… pesu bro';statusEl.textContent='Kekkuren bro... ippo pesu 🎧';};
+   recognition.onresult=e=>{const heard=e.results?.[0]?.[0]?.transcript;if(heard)reply(heard);};
+   recognition.onerror=e=>{statusEl.textContent='Voice capture aagala ('+e.error+'). Mic permission / internet check pannu.';};
+   recognition.onend=()=>{listening=false;speakBtn.textContent=continuousMode?'🎧 Listening mode ON':'🎙️ Start listening';if(continuousMode && !restartAfterSpeech){setTimeoutSafeStart();}};
+   recognition.start();
+ }catch(e){listening=false;statusEl.textContent='Voice start aagala. Mic permission check pannu.';}
+}
+speakBtn.addEventListener('click',()=>{
+ continuousMode=!continuousMode;
+ if(continuousMode){speakBtn.textContent='🎧 Listening mode ON';statusEl.textContent='Listening mode on. Ippo pesalaam bro.';startRecognition();}
+ else {if(recognition){try{recognition.stop();}catch(e){}}listening=false;speakBtn.textContent='🎙️ Start listening';statusEl.textContent='Listening stop pannitten.';}
+});
+document.querySelector('#stopListen').addEventListener('click',()=>{
+ continuousMode=false;restartAfterSpeech=false;
+ if(recognition){try{recognition.stop();}catch(e){}}
+ if(window.speechSynthesis)speechSynthesis.cancel();
+ listening=false;speakBtn.textContent='🎙️ Start listening';statusEl.textContent='Listening stop pannitten bro.';
+});
+document.querySelector('#repeat').onclick=()=>say(lastReply);
+document.querySelector('#clear').onclick=()=>{chat.innerHTML='';addMessage('Chat clear pannitten bro. Pudhusaa pesalaam!','bot');lastReply='Chat clear pannitten bro. Pudhusaa pesalaam!';};
+if('serviceWorker' in navigator && location.protocol.startsWith('http')) window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+</script>
+</body></html>
